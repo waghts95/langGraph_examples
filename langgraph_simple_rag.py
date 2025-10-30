@@ -9,7 +9,7 @@ This example demonstrates a basic RAG workflow:
    using open source LLMs
 """
 
-from typing import TypedDict, List
+from typing import TypedDict, List, Any
 import torch
 from langgraph.graph import StateGraph, END
 from langchain_community.embeddings import HuggingFaceEmbeddings
@@ -28,6 +28,8 @@ class RAGState(TypedDict):
     question: str
     documents: List[Document]
     answer: str
+    vectorstore: Any  # ← ADDED: Vector store for retrieval
+    llm: Any          # ← ADDED: Language model for generation
 
 
 # Sample documents to index
@@ -142,8 +144,8 @@ def retrieve_documents(state: RAGState) -> RAGState:
     """Retrieve relevant documents based on the question"""
     print(f"\n📚 Retrieving documents for: {state['question']}")
 
-    # Get vector store
-    vectorstore = state.get('vectorstore')
+    # ← UPDATED: Get vector store directly from state (it's now guaranteed to exist)
+    vectorstore = state['vectorstore']
 
     # Retrieve relevant documents
     retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
@@ -161,8 +163,8 @@ def generate_answer(state: RAGState) -> RAGState:
     """Generate an answer using the retrieved documents"""
     print(f"\n🤖 Generating answer with open source LLM...")
 
-    # Get LLM from state
-    llm = state.get('llm')
+    # ← UPDATED: Get LLM directly from state (it's now guaranteed to exist)
+    llm = state['llm']
 
     # Format documents as context
     context = "\n\n".join([doc.page_content for doc in state['documents']])
@@ -170,13 +172,13 @@ def generate_answer(state: RAGState) -> RAGState:
     # Create prompt with context - formatted for instruction-following models
     prompt = f"""Below is an instruction that describes a task, along with context that provides further information. Write a response that appropriately answers the question based on the context.
 
-### Context:
-{context}
+    ### Context:
+    {context}
 
-### Question:
-{state['question']}
+    ### Question:
+    {state['question']}
 
-### Answer:"""
+    ### Answer:"""
 
     # Generate answer using LLM
     try:
@@ -197,7 +199,7 @@ def generate_answer(state: RAGState) -> RAGState:
     }
 
 
-def create_rag_graph(vectorstore, llm):
+def create_rag_graph():
     """Create the RAG workflow graph"""
     # Initialize the graph
     workflow = StateGraph(RAGState)
@@ -243,7 +245,7 @@ def main():
 
     # Create RAG graph
     print("\n4. Creating RAG workflow graph...")
-    rag_app = create_rag_graph(vectorstore, llm)
+    rag_app = create_rag_graph()  # ← UPDATED: No longer pass vectorstore and llm here
     print("✓ Graph created")
 
     # Example questions
@@ -259,11 +261,11 @@ def main():
         print(f"Question {i}: {question}")
         print('=' * 70)
 
-        # Run the graph
+        # ← UPDATED: Pass vectorstore and llm as part of the initial state
         result = rag_app.invoke({
             "question": question,
-            "vectorstore": vectorstore,
-            "llm": llm,
+            "vectorstore": vectorstore,  # Now part of RAGState
+            "llm": llm,                   # Now part of RAGState
             "documents": [],
             "answer": ""
         })
